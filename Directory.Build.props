@@ -1,0 +1,33 @@
+<!-- Directory.Build.props (repo root) -->
+<Project>
+  <PropertyGroup>
+    <!-- Common metadata -->
+    <Company>mod-posh</Company>
+    <Authors>Jeffrey Patton</Authors>
+    <RepositoryUrl>https://github.com/mod-posh/HelpGenerator</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+
+    <!-- Version: single source of truth for pipelines and releases -->
+    <VersionPrefix>0.0.0</VersionPrefix>
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+
+    <!-- Licensing -->
+    <PackageLicenseExpression>GPL-3.0-only</PackageLicenseExpression>
+
+    <!-- SourceLink + symbols -->
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+
+    <!-- Build defaults -->
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+  </PropertyGroup>
+
+  <!-- SourceLink for all projects -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
+  </ItemGroup>
+</Project>
