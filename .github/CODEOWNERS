@@ -1,0 +1,14 @@
+# Default owner
+* @jeffpatton1971
+
+# Core engine
+/src/HelpGenerator.Core/ @jeffpatton1971
+
+# PowerShell layer
+/src/HelpGenerator.Powershell/ @jeffpatton1971
+
+# Documentation & ADRs
+/docs/ @jeffpatton1971
+
+# CI/CD workflows
+/.github/workflows/ @jeffpatton1971
