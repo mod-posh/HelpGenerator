@@ -86,6 +86,7 @@ jobs:
         with:
           project_name: "${{ vars.PROJECT_NAME }}"
           project_names: "HelpGenerator.Core,HelpGenerator.Powershell"
+          write_mode: 'none'
           verbose: 'verbose'
 
       # TODO: Replace with actual HelpGenerator docs generation when implemented.
