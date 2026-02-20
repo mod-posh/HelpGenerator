@@ -1,0 +1,62 @@
+name: Docs PR After Release
+
+on:
+  workflow_run:
+    workflows: ["New Release"]
+    types:
+      - completed
+
+jobs:
+  docs_pr:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout Repository (main)
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Get Latest Tag
+        id: latest_tag
+        run: |
+          LATEST_TAG=$(gh release list --limit 1 --json tagName --jq '.[0].tagName')
+          echo "LATEST_TAG=$LATEST_TAG" >> $GITHUB_ENV
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: ${{ vars.DOTNET_VERSION }}
+
+      # TODO: Replace with actual HelpGenerator docs generation when implemented.
+      - name: Generate Documentation (stub)
+        shell: bash
+        run: |
+          echo "Docs generation is currently stubbed."
+          echo "Replace this step once ${{ vars.PROJECT_NAME }} can generate docs."
+
+      - name: Create Pull Request with Docs Updates
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "Update docs for ${{ vars.PROJECT_NAME }} ${{ env.LATEST_TAG }}"
+          title: "Update docs for ${{ vars.PROJECT_NAME }} ${{ env.LATEST_TAG }}"
+          body: |
+            This PR updates generated documentation following release ${{ env.LATEST_TAG }}.
+
+            Notes:
+            - Generated via workflow: Docs PR After Release
+            - No code changes intended
+          branch: "docs/${{ env.LATEST_TAG }}"
+          base: main
+          delete-branch: true
+          add-paths: |
+            docs/**
+            README.md

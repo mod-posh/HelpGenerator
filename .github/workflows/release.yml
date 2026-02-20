@@ -1,0 +1,83 @@
+name: New Release
+
+on:
+  milestone:
+    types: [closed]
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository (main)
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Get Project Version
+        id: get_version
+        uses: mod-posh/GetProjectVersion@main
+        with:
+          Filename: 'Directory.Build.props'
+          verbose: "verbose"
+
+      - name: Guardrail milestone title must match version
+        shell: pwsh
+        run: |
+          $milestoneTitle = '${{ github.event.milestone.title }}'.Trim()
+          $version = '${{ steps.get_version.outputs.version }}'.Trim()
+
+          if ([string]::IsNullOrWhiteSpace($milestoneTitle)) {
+            throw "Milestone title is empty. Refusing to create release."
+          }
+
+          if ([string]::IsNullOrWhiteSpace($version)) {
+            throw "Project version is empty. Refusing to create release."
+          }
+
+          if ($milestoneTitle -ne $version) {
+            throw "Refusing to create release: milestone title '$milestoneTitle' does not match project version '$version'."
+          }
+
+          Write-Host "Guardrail passed: milestone title '$milestoneTitle' matches version '$version'."
+
+      - name: Create Release Notes
+        uses: mod-posh/Issue2ReleaseNotes@v0.0.3.3
+        with:
+          milestone_number: ${{ github.event.milestone.number }}
+          verbose: 'verbose'
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create Release (Tag + GitHub Release)
+        uses: mod-posh/NewTaggedRelease@v0.0.3.2
+        with:
+          name: 'Release v${{ env.VERSION }}'
+          filename: 'RELEASE.md'
+          version: ${{ env.VERSION }}
+          verbose: 'verbose'
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: ${{ vars.DOTNET_VERSION }}
+
+      - name: Build
+        run: dotnet build "${{ github.workspace }}/src/${{ vars.PROJECT_NAME }}.sln" --configuration Release
+
+      - name: Test
+        run: dotnet test "${{ github.workspace }}/src/${{ vars.PROJECT_NAME }}.sln" --configuration Release --no-build
+
+      - name: Pack (Release)
+        run: dotnet pack "${{ github.workspace }}/src/${{ vars.PROJECT_NAME }}.sln" --configuration Release --output "${{ github.workspace }}/publish" --no-build
+
+      - name: Upload release packages
+        uses: actions/upload-artifact@v6
+        with:
+          name: release-packages
+          path: publish/*.nupkg
+
+      # PSGallery publishing will be added once the PowerShell module packaging is implemented.
+      # - name: Publish to PowerShell Gallery
+      #   shell: pwsh
+      #   run: Publish-Module ...

@@ -1,0 +1,41 @@
+name: Merge Test Workflow
+
+on:
+  pull_request:
+    branches:
+      - main
+      - "milestone/**"
+
+jobs:
+  run_tests:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: ${{ vars.DOTNET_VERSION }}
+
+      - name: Clean
+        shell: pwsh
+        run: dotnet clean "${{ github.workspace }}/src/HelpGenerator.sln" --configuration Release
+
+      - name: Restore dependencies
+        shell: pwsh
+        run: dotnet restore "${{ github.workspace }}/src/HelpGenerator.sln"
+
+      - name: Build
+        shell: pwsh
+        run: dotnet build "${{ github.workspace }}/src/HelpGenerator.sln" --configuration Release --no-restore
+
+      - name: Test
+        shell: pwsh
+        run: dotnet test "${{ github.workspace }}/src/HelpGenerator.sln" --configuration Release --no-build --logger "trx;LogFileName=test_results.trx"
+
+      - name: Publish Test Results
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: Test Results
+          path: '**/TestResults/*.trx'
