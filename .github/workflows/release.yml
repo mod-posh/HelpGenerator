@@ -42,20 +42,28 @@ jobs:
           Write-Host "Guardrail passed: milestone title '$milestoneTitle' matches version '$version'."
 
       - name: Create Release Notes
-        uses: mod-posh/Issue2ReleaseNotes@v0.0.3.3
+        id: notes
+        uses: mod-posh/Issue2ReleaseNotes@v0.0.4.0
         with:
           milestone_number: ${{ github.event.milestone.number }}
+          write_mode: 'none'
           verbose: 'verbose'
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create Release (Tag + GitHub Release)
-        uses: mod-posh/NewTaggedRelease@v0.0.3.2
+        uses: mod-posh/NewTaggedRelease@v0.0.3.3
         with:
           name: 'Release v${{ env.VERSION }}'
-          filename: 'RELEASE.md'
+          filename: ${{ steps.notes.outputs.release_file }}
           version: ${{ env.VERSION }}
           verbose: 'verbose'
           github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Release Notes Artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: release-notes
+          path: RELEASE.md
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v5

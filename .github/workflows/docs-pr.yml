@@ -14,6 +14,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      actions: read
 
     steps:
       - name: Checkout Repository (main)
@@ -24,16 +25,68 @@ jobs:
 
       - name: Get Latest Tag
         id: latest_tag
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           LATEST_TAG=$(gh release list --limit 1 --json tagName --jq '.[0].tagName')
+          if [ -z "$LATEST_TAG" ]; then
+            echo "ERROR: Could not resolve latest tag"
+            exit 1
+          fi
           echo "LATEST_TAG=$LATEST_TAG" >> $GITHUB_ENV
+          echo "Resolved tag: $LATEST_TAG"
+
+      - name: Download release notes artifact from release workflow run
+        shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          echo "Release workflow run id: $RUN_ID"
+
+          ART_ID=$(gh api "/repos/$REPO/actions/runs/$RUN_ID/artifacts" \
+            --jq '.artifacts[] | select(.name=="release-notes") | .id')
+
+          if [ -z "$ART_ID" ]; then
+            echo "ERROR: Could not find artifact named 'release-notes' on run $RUN_ID"
+            exit 1
+          fi
+
+          mkdir -p _artifacts/release-notes
+          gh api "/repos/$REPO/actions/artifacts/$ART_ID/zip" > _artifacts/release-notes.zip
+          unzip -o _artifacts/release-notes.zip -d _artifacts/release-notes
+
+          if [ ! -f "_artifacts/release-notes/RELEASE.md" ]; then
+            echo "ERROR: RELEASE.md not found in artifact"
+            ls -la _artifacts/release-notes
+            exit 1
+          fi
+
+      - name: Stage release notes into docs/releases/<tag>/
+        shell: bash
+        run: |
+          mkdir -p "docs/releases/${LATEST_TAG}"
+          cp "_artifacts/release-notes/RELEASE.md" "docs/releases/${LATEST_TAG}/RELEASE.md"
+          echo "Wrote docs/releases/${LATEST_TAG}/RELEASE.md"
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
         with:
           dotnet-version: ${{ vars.DOTNET_VERSION }}
+
+      - name: Install PowerShell
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y powershell
+
+      - name: Update README using custom action
+        uses: mod-posh/UpdateReadme@main
+        with:
+          project_name: "${{ vars.PROJECT_NAME }}"
+          project_names: "HelpGenerator.Core,HelpGenerator.Powershell"
+          verbose: 'verbose'
 
       # TODO: Replace with actual HelpGenerator docs generation when implemented.
       - name: Generate Documentation (stub)
@@ -49,7 +102,10 @@ jobs:
           commit-message: "Update docs for ${{ vars.PROJECT_NAME }} ${{ env.LATEST_TAG }}"
           title: "Update docs for ${{ vars.PROJECT_NAME }} ${{ env.LATEST_TAG }}"
           body: |
-            This PR updates generated documentation following release ${{ env.LATEST_TAG }}.
+            This PR updates documentation following release ${{ env.LATEST_TAG }}.
+
+            Included:
+            - Release notes archived at docs/releases/${{ env.LATEST_TAG }}/RELEASE.md
 
             Notes:
             - Generated via workflow: Docs PR After Release
@@ -58,5 +114,5 @@ jobs:
           base: main
           delete-branch: true
           add-paths: |
+            docs/releases/${{ env.LATEST_TAG }}/RELEASE.md
             docs/**
-            README.md
