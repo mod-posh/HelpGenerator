@@ -1,73 +1,76 @@
-# CSharp Modules
+| Latest Version | Gallery | Issues | Testing | License | Discord |
+|-----------------|-----------------|----------------|----------------|----------------|----------------|
+| [![Latest Version](https://img.shields.io/github/v/tag/mod-posh/HelpGenerator)](https://github.com/mod-posh/HelpGenerator/tags) | [![Nuget.org](https://img.shields.io/nuget/dt/HelpGenerator.Core?label=HelpGenerator.Core)](https://www.nuget.org/packages/HelpGenerator.Core)<br/>[![Nuget.org](https://img.shields.io/nuget/dt/HelpGenerator.Powershell?label=HelpGenerator.Powershell)](https://www.nuget.org/packages/HelpGenerator.Powershell) | [![GitHub issues](https://img.shields.io/github/issues/mod-posh/HelpGenerator)](https://github.com/mod-posh/HelpGenerator/issues) | [![Merge Test Workflow](https://github.com/mod-posh/HelpGenerator/actions/workflows/test.yml/badge.svg)](https://github.com/mod-posh/HelpGenerator/actions/workflows/test.yml) | [![GitHub license](https://img.shields.io/github/license/mod-posh/HelpGenerator)](https://github.com/mod-posh/HelpGenerator/blob/master/LICENSE) | [![Discord Server](https://assets-global.website-files.com/6257adef93867e50d84d30e2/636e0b5493894cf60b300587_full_logo_white_RGB.svg)](https://discord.com/channels/1044305359021555793/1044305781627035811) |
+# HelpGenerator
 
-Enclosed are the files I use to build and deploy PowerShell CSharp modules. The basic file structure is included so you know what it should look like. Several Modules are required, and the Tasks will check for them at the start. This project assumes that you have placed your code in a subfolder named after your project (there is a checkbox for this during the project creation in Visual Studio).
+HelpGenerator is a focused tool suite for generating and validating PowerShell help artifacts **quickly and deterministically**.
 
-## Dependencies
+It is designed to make it easy for developers to produce clean, readable help documentation from:
 
-You will need to have the following modules installed:
+- Script-based comment help (functions and modules)
+- Compiled C# cmdlets (reflection + XML documentation)
+- Existing help artifacts (MAML + HelpInfo.xml)
 
- 1. BuildHelpers        : This is used to help build the Module Manifest and the Module file.
- 2. PowerShellForGitHub : This is used for the ReleaseNotes task.
- 3. PlatyPS             : This is used to set up and build the help documents.
- 4. Pester              : This is the testing framework.
+It generates:
 
-Please see the [psakefile](psakefile.ps1) for the versions currently used.
+- **MAML** external help (command help XML)
+- **HelpInfo.xml** and structure required for updatable external help (CAB packaging support)
+- **Markdown** documentation (command/module docs derived from the normalized help model)
+- Deterministic placeholder scaffolding when help is missing
 
-## Supporting Files
+## Scope
 
-There are several files used to help authenticate to various services, and depending on your needs, you may not need them or need something different. You can use them as is, but you must populate the various tokens and keys yourself. Also, you can use them as a template if you need nothing.
+This project has a narrow scope by design:
 
-### ado.json
+- Consume: comment-based help, compiled cmdlet metadata + XML docs, MAML, HelpInfo.xml
+- Produce: Markdown docs, MAML, HelpInfo.xml, and updatable help packaging structure
 
-This file is used to authenticate into the Azure DevOps Rest API, and you will need a token for this, so please consult the [Documentation](https://learn.microsoft.com/en-us/azure/devops/organizations/accounts/use-personal-access-tokens-to-authenticate?view=azure-devops&tabs=Windows). I include three items:
+If it’s not part of generating or validating PowerShell help artifacts, it is out of scope.
 
-1. Orgname    : The name of the Azure DevOps organization.
-2. Token      : The PAT Token.
-3. Expiration : The expiration date.
+## Non-goals
 
-I include the Expiration so I can get a visual indication of how long before I need to renew the token; there is logic within the psakefile to display that out when you run it.
+HelpGenerator is **not**:
 
-### discord.json
+- A static site generator
+- A documentation hosting platform
+- A prose rewriter or “smart” help authoring tool
+- A PlatyPS extension or wrapper
 
-This file is used to post a message to Discord. I have a server that I set up, and I post updates to channels for each module I use. If you wish to use the Post2Discord task, you must have a Discord account, set up a personal server, and get the webhook URL; please consult the [Documentation](https://support.discord.com/hc/en-us/articles/228383668-Intro-to-Webhooks).
+## Quickstart
 
-### github.json
+See: [`docs/usage/quickstart.md`](docs/usage/quickstart.md)
 
-This file is used to authenticate into the GitHub API; you must set up a token for this, so please consult the [Documentation](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token). This file is also used for the ReleaseNotes task.
+## Architecture and Governance
 
-### blueksy.json
+This repository is governed by Architecture Decision Records (ADRs).
+ADRs define scope, output contracts, validation rules, and repository governance.
 
-This file is used to authenticate into the Bluesky Social Media platform. You must set up a token for this, so please consult the [Documentation](https://github.com/bluesky-social/atproto-ecosystem/blob/main/app-passwords.md).
+- ADR index: [`docs/adr/README.md`](docs/adr/README.md)
 
-### nuget.config
+If implementation conflicts with an ADR:
 
-This file is initially set up to publish to nuget.org and the PowerShell Gallery. You must create an API Key for this. Please consult the [Documentation](https://learn.microsoft.com/en-us/powershell/scripting/gallery/concepts/publishing-guidelines?view=powershell-7.3).
+- the implementation changes, or
+- the ADR is formally updated first.
 
-> [!Caution]
-> You will want to add ado.json, discord.json, github.json, bluesky.json to your .gitignore before any commits
-> those files contain sensitive information such as passwords and credentials, they are provided here to give
-> you a place to start
+Silent drift is not allowed.
 
-## PsakeFile
+## Development workflow
 
-This is the main file from which all automation is kicked off. I will go through the basic usage of this file, but for details on setting it up for your use, please refer to the file itself. The Psakefile contains a collection of Tasks. For more information on setting up and using Psake, please consult the [Documentation](https://psake.readthedocs.io/en/latest/). I will cover the basic tasks that I use so you have an understanding of how they work.
+Work is milestone-driven:
 
-### Localuse
+- Milestones map to GitHub Projects/boards
+- Issues are tied to milestones and ADR labels
+- Milestone branches are used for development
+- Closing a milestone triggers a release workflow (with guardrails)
 
-This task is run regularly, compiling the module after local changes so I can test functionality. It runs a Build but does not do any testing that would typically accompany it.
+See: [`CONTRIBUTING.md`](CONTRIBUTING.md)
 
-### Build
+## Distribution
 
-This task runs the LocalUse and PesterTests tasks, so make sure you have some of those; otherwise, remove the reference to the PesterTest Task. For more information on setting up Tests, please refer to the [Documentation](https://pester.dev/docs/quick-start).
+HelpGenerator will be published to the **PowerShell Gallery** via the release pipeline once module packaging is implemented.
 
-### Package
+Repository: <https://github.com/mod-posh/HelpGenerator>
 
-This task builds the help files, packages them up for deployment, and updates the README.
+## License
 
-### Deploy
-
-This task will check to make sure we have checked out the Deployment Branch, and the deployment should fail if we are not in the deployment branch. It will then create the Release Notes, compiled from the GitHub Milestones; if you are not using them, remove the reference to this task. It will then Publish the module to the PowerShellGallery, create and push a Tagged release, and create the GitHub Release.
-
-### Notifications
-
-This task will post updates to any notification channels you have set up; Post2Discord and Post2BlueSky are the defaults.
+See: [`LICENSE`](LICENSE)
