@@ -22,4 +22,11 @@
     <ProjectReference Include="..\..\..\src\HelpGenerator.Core\HelpGenerator.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="..\..\..\src\HelpGenerator.Core\Schemas\PSMaml\**\*.*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>Schemas\PSMaml\%(RecursiveDir)%(Filename)%(Extension)</Link>
+    </None>
+  </ItemGroup>
+  
 </Project>

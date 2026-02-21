@@ -12,7 +12,9 @@ namespace HelpGenerator.Core.Maml
 
         public XDocument Render(ModuleHelp module)
         {
-            var root = new XElement(nsHelp + "helpItems");
+            var root = new XElement(nsHelp + "helpItems",
+                new XAttribute("schema", "maml")
+            );
 
             foreach (var command in module.Commands.OrderBy(c => c.Name, StringComparer.OrdinalIgnoreCase))
             {
@@ -25,6 +27,25 @@ namespace HelpGenerator.Core.Maml
             );
         }
 
+        private IEnumerable<XElement> RenderParas(string? text)
+        {
+            // Schema expects one or more <maml:para>. We’ll always emit at least one.
+            if (string.IsNullOrWhiteSpace(text))
+                return new[] { new XElement(nsMaml + "para", string.Empty) };
+
+            // Preserve author formatting; split into paragraphs on blank lines.
+            var normalized = text.Replace("\r\n", "\n").Replace("\r", "\n").Trim();
+            var blocks = normalized.Split("\n\n", StringSplitOptions.None)
+                .Select(b => b.Trim())
+                .Where(b => b.Length > 0)
+                .ToList();
+
+            if (blocks.Count == 0)
+                return new[] { new XElement(nsMaml + "para", string.Empty) };
+
+            return blocks.Select(b => new XElement(nsMaml + "para", b));
+        }
+
         private XElement RenderCommand(CommandHelp command)
         {
             var cmd = new XElement(nsCommand + "command",
@@ -33,18 +54,41 @@ namespace HelpGenerator.Core.Maml
                 new XAttribute(XNamespace.Xmlns + "dev", nsDev)
             );
 
-            cmd.Add(
-                new XElement(nsCommand + "details",
-                    new XElement(nsCommand + "name", command.Name),
-                    new XElement(nsMaml + "description",
-                        new XElement(nsMaml + "para", command.Synopsis ?? string.Empty)
-                    )
+            // details (name -> description -> synonyms -> copyright)
+            var (verb, noun) = SplitVerbNoun(command.Name);
+
+            cmd.Add(new XElement(nsCommand + "details",
+                new XElement(nsCommand + "name", command.Name),
+                new XElement(nsMaml + "description", RenderParas(command.Synopsis)),
+                new XElement(nsCommand + "synonyms",
+                    new XElement(nsCommand + "synonym", command.Name)
+                ),
+                new XElement(nsCommand + "verb", verb),
+                new XElement(nsCommand + "noun", noun),
+                new XElement(nsMaml + "copyright",
+                    new XElement(nsMaml + "para", string.Empty)
                 )
-            );
+            ));
+
+            // top-level description (must appear before syntax)
+            cmd.Add(new XElement(nsMaml + "description",
+                RenderParas(command.Description ?? command.Synopsis)
+            ));
 
             cmd.Add(RenderSyntax(command));
-            cmd.Add(RenderParameters(command));
+
+            if (command.Parameters.Count > 0)
+                cmd.Add(RenderParameters(command));
+
+            cmd.Add(RenderInputTypes());
+            cmd.Add(RenderReturnValues());
+            cmd.Add(RenderTerminatingErrors());
+            cmd.Add(RenderNonTerminatingErrors());
+
+            // required later in sequence
+            cmd.Add(RenderAlertSet());
             cmd.Add(RenderExamples(command));
+            cmd.Add(RenderRelatedLinks(command));
 
             return cmd;
         }
@@ -54,7 +98,7 @@ namespace HelpGenerator.Core.Maml
             var syntax = new XElement(nsCommand + "syntax");
 
             var syntaxItem = new XElement(nsCommand + "syntaxItem",
-                new XElement(nsCommand + "name", command.Name)
+                new XElement(nsMaml + "name", command.Name) // <-- maml:name, not command:name
             );
 
             foreach (var param in command.Parameters.OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase))
@@ -65,7 +109,11 @@ namespace HelpGenerator.Core.Maml
                         new XAttribute("position", "named"),
                         new XAttribute("pipelineInput", "false"),
                         new XAttribute("globbing", "false"),
-                        new XElement(nsMaml + "name", param.Name)
+                        new XElement(nsMaml + "name", param.Name),
+                        new XElement(nsCommand + "parameterValue",
+                            new XAttribute("required", "false"),
+                            param.TypeName ?? "System.Object"
+                        )
                     )
                 );
             }
@@ -80,18 +128,21 @@ namespace HelpGenerator.Core.Maml
 
             foreach (var param in command.Parameters.OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase))
             {
-                parameters.Add(
-                    new XElement(nsCommand + "parameter",
+                var p = new XElement(nsCommand + "parameter",
+                    new XAttribute("required", "false"),
+                    new XAttribute("position", "named"),
+                    new XAttribute("pipelineInput", "false"),
+                    new XAttribute("globbing", "false"),
+                    new XElement(nsMaml + "name", param.Name),
+                    new XElement(nsMaml + "description", RenderParas(param.Description)),
+                    new XElement(nsCommand + "parameterValue",
                         new XAttribute("required", "false"),
-                        new XAttribute("position", "named"),
-                        new XAttribute("pipelineInput", "false"),
-                        new XAttribute("globbing", "false"),
-                        new XElement(nsMaml + "name", param.Name),
-                        new XElement(nsMaml + "description",
-                            new XElement(nsMaml + "para", param.Description ?? string.Empty)
-                        )
-                    )
-                );
+                        param.TypeName ?? "System.Object"
+                    ),
+                    RenderDevType(param.TypeName ?? "System.Object")
+                    );
+
+                parameters.Add(p);
             }
 
             return parameters;
@@ -101,22 +152,128 @@ namespace HelpGenerator.Core.Maml
         {
             var examples = new XElement(nsCommand + "examples");
 
+            // Always include at least one example (schema requires it)
+            var list = command.Examples.Count == 0
+                ? new[] { new ExampleHelp { Code = string.Empty, Remarks = string.Empty } }
+                : command.Examples;
+
             int index = 1;
 
-            foreach (var example in command.Examples)
+            foreach (var ex in list)
             {
                 examples.Add(
                     new XElement(nsCommand + "example",
-                        new XElement(nsCommand + "title", $"Example {index++}"),
-                        new XElement(nsCommand + "code", example.Code),
+                        new XElement(nsMaml + "title", $"Example {index++}"),
+                        new XElement(nsDev + "code", ex.Code ?? string.Empty),
                         new XElement(nsCommand + "remarks",
-                            new XElement(nsMaml + "para", example.Remarks ?? string.Empty)
+                            new XElement(nsMaml + "para", ex.Remarks ?? string.Empty)
                         )
                     )
                 );
             }
 
             return examples;
+        }
+
+        private XElement RenderInputTypes()
+        {
+            return new XElement(nsCommand + "inputTypes",
+                new XElement(nsCommand + "inputType",
+                    RenderDevType("System.Object"),
+                    new XElement(nsMaml + "description",
+                        new XElement(nsMaml + "para", string.Empty)
+                    )
+                )
+            );
+        }
+
+        private XElement RenderReturnValues()
+        {
+            return new XElement(nsCommand + "returnValues",
+                new XElement(nsCommand + "returnValue",
+                    RenderDevType("System.Object"),
+                    new XElement(nsMaml + "description",
+                        new XElement(nsMaml + "para", string.Empty)
+                    )
+                )
+            );
+        }
+
+        private XElement RenderTerminatingErrors()
+        {
+            return new XElement(nsCommand + "terminatingErrors",
+                new XElement(nsCommand + "terminatingError",
+                    RenderDevType("System.Exception"),
+                    new XElement(nsCommand + "category", "NotSpecified"),
+                    new XElement(nsMaml + "description",
+                        new XElement(nsMaml + "para", string.Empty)
+                    )
+                )
+            );
+        }
+
+        private XElement RenderNonTerminatingErrors()
+        {
+            return new XElement(nsCommand + "nonTerminatingErrors",
+                new XElement(nsCommand + "nonTerminatingError",
+                    RenderDevType("System.Exception"),
+                    new XElement(nsCommand + "category", "NotSpecified"),
+                    new XElement(nsMaml + "description",
+                        new XElement(nsMaml + "para", string.Empty)
+                    )
+                )
+            );
+        }
+
+        private XElement RenderAlertSet()
+        {
+            // Minimal valid alertSet with one empty alert
+            return new XElement(nsMaml + "alertSet",
+                new XElement(nsMaml + "alert",
+                    new XElement(nsMaml + "para", string.Empty)
+                )
+            );
+        }
+
+        private XElement RenderRelatedLinks(CommandHelp command)
+        {
+            var rl = new XElement(nsMaml + "relatedLinks");
+
+            if (command.Links.Count == 0)
+            {
+                rl.Add(new XElement(nsMaml + "navigationLink",
+                    new XElement(nsMaml + "linkText", string.Empty),
+                    new XElement(nsMaml + "uri", string.Empty)
+                ));
+                return rl;
+            }
+
+            foreach (var link in command.Links)
+            {
+                rl.Add(new XElement(nsMaml + "navigationLink",
+                    new XElement(nsMaml + "linkText", link.Uri),
+                    new XElement(nsMaml + "uri", link.Uri)
+                ));
+            }
+
+            return rl;
+        }
+
+        private XElement RenderDevType(string typeName)
+        {
+            return new XElement(nsDev + "type",
+                new XElement(nsMaml + "name", typeName),
+                new XElement(nsMaml + "uri", string.Empty)
+            );
+        }
+
+        private static (string Verb, string Noun) SplitVerbNoun(string name)
+        {
+            var idx = name.IndexOf('-', StringComparison.Ordinal);
+            if (idx <= 0 || idx == name.Length - 1)
+                return (name, string.Empty);
+
+            return (name.Substring(0, idx), name.Substring(idx + 1));
         }
     }
 }
