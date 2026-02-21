@@ -63,11 +63,12 @@ namespace HelpGenerator.Core.Maml
                 new XElement(nsCommand + "synonyms",
                     new XElement(nsCommand + "synonym", command.Name)
                 ),
-                new XElement(nsCommand + "verb", verb),
-                new XElement(nsCommand + "noun", noun),
                 new XElement(nsMaml + "copyright",
                     new XElement(nsMaml + "para", string.Empty)
-                )
+                ),
+                new XElement(nsCommand + "verb", verb),
+                new XElement(nsCommand + "noun", noun),
+                new XElement(nsDev + "version", "1.0.0.0")
             ));
 
             // top-level description (must appear before syntax)
@@ -165,7 +166,7 @@ namespace HelpGenerator.Core.Maml
                     new XElement(nsCommand + "example",
                         new XElement(nsMaml + "title", $"Example {index++}"),
                         new XElement(nsDev + "code", ex.Code ?? string.Empty),
-                        new XElement(nsCommand + "remarks",
+                        new XElement(nsDev + "remarks",
                             new XElement(nsMaml + "para", ex.Remarks ?? string.Empty)
                         )
                     )
@@ -204,10 +205,13 @@ namespace HelpGenerator.Core.Maml
             return new XElement(nsCommand + "terminatingErrors",
                 new XElement(nsCommand + "terminatingError",
                     RenderDevType("System.Exception"),
-                    new XElement(nsCommand + "category", "NotSpecified"),
                     new XElement(nsMaml + "description",
                         new XElement(nsMaml + "para", string.Empty)
-                    )
+                    ),
+                    new XElement(nsCommand + "category", "NotSpecified"),
+                    new XElement(nsCommand + "errorID", string.Empty),
+                    RenderRecommendedAction(),
+                    RenderTargetObjectType("System.Object")
                 )
             );
         }
@@ -217,10 +221,13 @@ namespace HelpGenerator.Core.Maml
             return new XElement(nsCommand + "nonTerminatingErrors",
                 new XElement(nsCommand + "nonTerminatingError",
                     RenderDevType("System.Exception"),
-                    new XElement(nsCommand + "category", "NotSpecified"),
                     new XElement(nsMaml + "description",
                         new XElement(nsMaml + "para", string.Empty)
-                    )
+                    ),
+                    new XElement(nsCommand + "category", "NotSpecified"),
+                    new XElement(nsCommand + "errorID", string.Empty),
+                    RenderRecommendedAction(),
+                    RenderTargetObjectType("System.Object")
                 )
             );
         }
@@ -262,6 +269,23 @@ namespace HelpGenerator.Core.Maml
         private XElement RenderDevType(string typeName)
         {
             return new XElement(nsDev + "type",
+                new XElement(nsMaml + "name", typeName),
+                new XElement(nsMaml + "uri", string.Empty)
+            );
+        }
+
+        private XElement RenderRecommendedAction()
+        {
+            // recommendedAction is "block content" directly (para/list/table/etc) — no <maml:description>
+            return new XElement(nsCommand + "recommendedAction",
+                new XElement(nsMaml + "para", string.Empty)
+            );
+        }
+
+        private XElement RenderTargetObjectType(string typeName = "System.Object")
+        {
+            // targetObjectType expects maml:name + maml:uri, NOT dev:type
+            return new XElement(nsCommand + "targetObjectType",
                 new XElement(nsMaml + "name", typeName),
                 new XElement(nsMaml + "uri", string.Empty)
             );
