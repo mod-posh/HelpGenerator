@@ -23,6 +23,18 @@ jobs:
           ref: main
           fetch-depth: 0
 
+      - name: Debug - repo state after checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "HEAD: $(git rev-parse --short HEAD)"
+          echo "Branch: $(git branch --show-current)"
+          echo "Looking for existing docs/releases..."
+          ls -la docs || true
+          find docs -maxdepth 3 -type f -name RELEASE.md -print || true
+          echo "Does docs/releases/${LATEST_TAG:-MISSING}/RELEASE.md exist?"
+          test -f "docs/releases/${LATEST_TAG:-}/RELEASE.md" && echo "YES" || echo "NO"
+
       - name: Get Latest Tag
         id: latest_tag
         shell: bash
@@ -36,6 +48,13 @@ jobs:
           fi
           echo "LATEST_TAG=$LATEST_TAG" >> $GITHUB_ENV
           echo "Resolved tag: $LATEST_TAG"
+
+      - name: Debug - latest tag env
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "LATEST_TAG='$LATEST_TAG'"
+          test -n "$LATEST_TAG"
 
       - name: Download release notes artifact from release workflow run
         shell: bash
@@ -71,6 +90,19 @@ jobs:
           cp "_artifacts/release-notes/RELEASE.md" "docs/releases/${LATEST_TAG}/RELEASE.md"
           echo "Wrote docs/releases/${LATEST_TAG}/RELEASE.md"
 
+      - name: Debug - after staging release notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "LATEST_TAG='$LATEST_TAG'"
+          ls -la "docs/releases/${LATEST_TAG}" || true
+          echo "---- git status (docs) ----"
+          git status --porcelain=v1 -- docs/ || true
+          echo "---- git diff (docs) ----"
+          git diff --name-status -- docs/ || true
+          echo "---- show file hash ----"
+          sha256sum "docs/releases/${LATEST_TAG}/RELEASE.md" || true
+
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
         with:
@@ -96,6 +128,17 @@ jobs:
           echo "Docs generation is currently stubbed."
           echo "Replace this step once ${{ vars.PROJECT_NAME }} can generate docs."
 
+      - name: Debug - just before create-pull-request
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "---- git status (docs) ----"
+          git status --porcelain=v1 -- docs/ || true
+          echo "---- tracked files matching RELEASE.md ----"
+          git ls-files | grep -E '^docs/releases/.+/RELEASE\.md$' || true
+          echo "---- untracked under docs ----"
+          git status --porcelain=v1 --untracked-files=all -- docs/ || true
+          
       - name: Create Pull Request with Docs Updates
         uses: peter-evans/create-pull-request@v7
         with:
@@ -111,7 +154,7 @@ jobs:
             Notes:
             - Generated via workflow: Docs PR After Release
             - No code changes intended
-          branch: "docs/${{ env.LATEST_TAG }}"
+          branch: "docs/${{ env.LATEST_TAG }}-${{ github.run_id }}"
           base: main
           delete-branch: true
           add-paths: |
